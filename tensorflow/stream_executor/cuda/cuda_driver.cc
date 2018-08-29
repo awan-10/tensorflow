@@ -38,6 +38,7 @@ limitations under the License.
 #include "tensorflow/stream_executor/platform/mutex.h"
 #include "tensorflow/stream_executor/platform/port.h"
 
+
 bool FLAGS_gpuexec_cuda_driver_inject_init_error = false;
 bool FLAGS_gpuexec_cuda_sync_around_driver_calls = false;
 bool FLAGS_gpuexec_cuda_device_0_only = false;
@@ -800,7 +801,19 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
 /* static */ void *CUDADriver::DeviceAllocate(CudaContext *context,
                                               uint64 bytes) {
   ScopedActivateContext activated{context};
-  CUdeviceptr result = 0;
+  MPI_Info info;
+  MPI_Info_create( &info );
+  MPI_Info_set(info, "Location", "GPU");
+  void * ptr;
+  int ierr = MPI_Alloc_mem(bytes, info, &ptr);
+  if (ierr != MPI_SUCCESS) {
+     LOG(ERROR) << "failed to allocate "
+               << port::HumanReadableNumBytes::ToString(bytes) << " (" << bytes
+               << " bytes) from device: " << ierr;
+    return nullptr;
+  }
+  
+  /*CUdeviceptr result = 0;
   CUresult res = cuMemAlloc(&result, bytes);
   if (res != CUDA_SUCCESS) {
     LOG(ERROR) << "failed to allocate "
@@ -808,7 +821,8 @@ CUDADriver::ContextGetSharedMemConfig(CudaContext* context) {
                << " bytes) from device: " << ToString(res);
     return nullptr;
   }
-  void *ptr = reinterpret_cast<void *>(result);
+  */
+  //void *ptr = reinterpret_cast<void *>(result);
   VLOG(2) << "allocated " << ptr << " for context " << context << " of "
           << bytes << " bytes";
   return ptr;
